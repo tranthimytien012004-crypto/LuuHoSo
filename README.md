@@ -15,7 +15,7 @@ Dự án được tổ chức theo mô hình Fullstack tách biệt để dễ d
 
 ## 📋 Phân công công việc (Collaborators)
 
-| Thành viên | Nhiệm vụ chính | Trạng thái |
+| Thành viên | Nhiệm vụ chính
 | Phạm Thị Hoa Tím | Thiết kế Database, Viết API Backend, kiểm thử
 |Tràn Thị Mỹ Tiên | Phát triển UI/UX, Tích hợp logic QR Code & MetaMask, kiểm thử
 |Cả 2 cùng làm | Deploy Smart Contract
