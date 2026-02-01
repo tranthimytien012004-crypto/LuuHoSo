@@ -1,21 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { verifyOnChain } from '../services/web3Service'; 
+import { QRCodeCanvas } from 'qrcode.react'; // Đảm bảo đã chạy: npm install qrcode.react
 
 export default function StudentList({ students }) {
-  // THÊM MỚI: State để lưu kết quả xác thực tự động
   const [authStatus, setAuthStatus] = useState({});
 
-  // THÊM MỚI: Hàm tự động kiểm tra khi danh sách students thay đổi
   useEffect(() => {
     const checkAllRecords = async () => {
       if (students && students.length > 0) {
         const results = { ...authStatus };
         for (let std of students) {
-          if (std.records && std.records[0]) {
+          // Chỉ kiểm tra nếu chưa có trạng thái để tránh lặp lại lãng phí
+          if (!results[std._id || std.email] && std.records && std.records[0]) {
             const hash = std.records[0].ipfsHash || std.records[0].hash;
             if (hash) {
-              const isValid = await verifyOnChain(hash);
-              results[std._id || std.email] = isValid ? "VALID" : "INVALID";
+              try {
+                const isValid = await verifyOnChain(hash);
+                results[std._id || std.email] = isValid ? "VALID" : "INVALID";
+              } catch (error) {
+                console.error("Lỗi xác thực Blockchain:", error);
+              }
             }
           }
         }
@@ -48,8 +52,8 @@ export default function StudentList({ students }) {
               <th style={{ padding: '10px' }}>Email</th>
               <th style={{ padding: '10px' }}>Ví (Wallet)</th>
               <th style={{ padding: '10px' }}>Văn bằng đã nộp</th>
-              {/* GIỮ NGUYÊN CŨ, CHỈ THÊM MỚI CỘT NÀY */}
               <th style={{ padding: '10px' }}>Trạng thái Blockchain</th> 
+              <th style={{ padding: '10px' }}>Mã QR Truy Xuất</th> {/* THÊM CỘT NÀY */}
               <th style={{ padding: '10px' }}>Hành động</th>
             </tr>
           </thead>
@@ -76,7 +80,6 @@ export default function StudentList({ students }) {
                   )}
                 </td>
                 
-                {/* THÊM MỚI: Cột hiển thị trạng thái tự động */}
                 <td style={{ padding: '10px', textAlign: 'center' }}>
                   {authStatus[std._id || std.email] === "VALID" ? (
                     <b style={{ color: '#28a745' }}>✅ Đã lưu On-chain</b>
@@ -85,6 +88,15 @@ export default function StudentList({ students }) {
                   ) : (
                     <span style={{ color: '#888' }}>⏳ Đang kiểm tra...</span>
                   )}
+                </td>
+
+                {/* PHẦN MÃ QR QUAN TRỌNG NHẤT ĐỂ QUÉT BẰNG 4G */}
+                <td style={{ padding: '10px', textAlign: 'center' }}>
+                  <QRCodeCanvas 
+                    value={`${window.location.origin}/verify/${std._id || std.email}`} 
+                    size={70} 
+                    includeMargin={true}
+                  />
                 </td>
 
                 <td style={{ padding: '10px' }}>
@@ -100,7 +112,7 @@ export default function StudentList({ students }) {
                     }}
                     disabled={!std.records || std.records.length === 0}
                   >
-                    🔍 Verify Blockchain
+                    🔍 Verify
                   </button>
                 </td>
               </tr>
