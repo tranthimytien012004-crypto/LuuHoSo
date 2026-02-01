@@ -7,6 +7,8 @@ const path = require("path");
 const SinhVienRoutes = require("./routes/SinhVienRoutes.cjs");
 
 const app = express();
+const cors = require('cors');
+app.use(cors()); 
 
 // --- CẤU HÌNH MIDDLEWARE ---
 app.use(cors());
