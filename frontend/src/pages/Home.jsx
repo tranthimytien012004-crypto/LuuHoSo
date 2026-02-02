@@ -183,11 +183,24 @@ export default function Home() {
                       <span style={{color: rec.status === 'Verified' ? '#10b981' : '#f59e0b'}}>{rec.status}</span>
                     </td>
                     <td style={tdStyle}>
-                      {blockchainStatus[rec.fileHash] ? (
-                        <span style={{color: '#10b981', fontWeight: 'bold', fontSize: '11px'}}>✅ ĐÃ XÁC THỰC</span>
+                      {(() => {
+                  // Chuẩn hóa hash để tìm kiếm trong object blockchainStatus
+                  const h = rec.fileHash.toLowerCase().trim();
+                  const with0x = h.startsWith("0x") ? h : "0x" + h;
+                  const without0x = h.replace("0x", "");
+
+                  // Kiểm tra xem một trong các biến thể có đang là true không
+                  if (blockchainStatus[h] || blockchainStatus[with0x] || blockchainStatus[without0x]) {
+                  return <span style={{color: '#10b981', fontWeight: 'bold', fontSize: '11px'}}>✅ ĐÃ XÁC THỰC</span>;
+                }
+
+                // Nếu chưa xác thực nhưng trạng thái DB là Verified thì báo đang đồng bộ
+                return rec.status === 'Verified' ? (
+                <small style={{color: '#94a3b8'}}>Đang đồng bộ...</small>
                       ) : (
-                        rec.status === 'Verified' ? <small style={{color: '#94a3b8'}}>Đang đồng bộ...</small> : "-"
-                      )}
+                         <span style={{color: '#64748b'}}>-</span>
+                  );
+                  })()}
                     </td>
                     <td style={tdStyle}>
                       <div style={{display: 'flex', gap: '8px'}}>
