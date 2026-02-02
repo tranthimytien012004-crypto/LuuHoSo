@@ -15,24 +15,24 @@ export default function Home() {
   const [selectedQR, setSelectedQR] = useState(null);
   const [blockchainStatus, setBlockchainStatus] = useState({});
 
+  // --- CẤU HÌNH API URL (Lấy từ biến môi trường Vercel hoặc mặc định localhost) ---
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api/students";
+
   // --- THÔNG TIN SMART CONTRACT ---
   const CONTRACT_ADDRESS = "0xc574902660D1A42bf9565c4033B08b4F52F9A6A4";
 
-  // --- LOGIC BLOCKCHAIN 1: KIỂM TRA TRẠNG THÁI ON-CHAIN (READ ONLY) ---
+  // --- LOGIC BLOCKCHAIN 1: KIỂM TRA TRẠNG THÁI ON-CHAIN ---
   const checkBlockchainStatus = useCallback(async (records) => {
     if (!records || records.length === 0 || !window.ethereum) return;
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
-      // Kết nối với Contract bằng Provider (Chế độ đọc - không tốn phí)
       const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, provider);
       const statuses = { ...blockchainStatus };
 
       for (let rec of records) {
         if (rec.fileHash) {
           try {
-            // Gọi hàm verifyRecord từ Smart Contract (trả về: isValid, studentWallet, timestamp)
             const result = await contract.verifyRecord(rec.fileHash);
-            // result[0] tương ứng với biến 'isValid' (kiểu bool) trong Struct Record của Solidity
             statuses[rec.fileHash] = result[0]; 
           } catch (e) {
             statuses[rec.fileHash] = false;
@@ -48,19 +48,20 @@ export default function Home() {
   const fetchData = async () => {
     try {
       const [pendingRes, approvedRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/students/pending-records"),
-        axios.get("http://localhost:5000/api/students/approved-records")
+        axios.get(`${API_URL}/pending-records`),
+        axios.get(`${API_URL}/approved-records`)
       ]);
       if (pendingRes.data.success) setAllStudents(pendingRes.data.data || []);
       if (approvedRes.data.success) {
           const approvedData = approvedRes.data.data || [];
           setApprovedStudents(approvedData);
-          
-          // Sau khi lấy dữ liệu từ Backend, tự động kiểm tra xem chúng có trên Blockchain không
           const allApproved = approvedData.flatMap(std => std.approvedRecords);
           checkBlockchainStatus(allApproved);
       }
-    } catch (err) { console.error("Lỗi fetch data:", err); }
+    } catch (err) { 
+      console.error("Lỗi fetch data:", err); 
+      // Nếu lỗi, có thể do link API_URL cấu hình trên Vercel chưa đúng
+    }
   };
 
   useEffect(() => {
@@ -74,23 +75,21 @@ export default function Home() {
     }
   }, []);
 
-  // --- LOGIC BLOCKCHAIN 2: THU HỒI HỒ SƠ (WRITE - TỐN GAS) ---
+  // --- LOGIC BLOCKCHAIN 2: THU HỒI HỒ SƠ ---
   const handleRevoke = async (studentId, recordId) => {
     if (window.confirm("CẢNH BÁO: Bạn đang vô hiệu hóa hồ sơ này trên Blockchain. Tiếp tục?")) {
       try {
         const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner(); // Cần chữ ký của Nhà trường (Admin)
+        const signer = await provider.getSigner();
         const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, signer);
         
         const student = approvedStudents.find(s => s.studentId === studentId);
         const record = student.approvedRecords.find(r => r._id === recordId);
 
-        // Thực thi hàm revokeRecord trên Smart Contract để hủy tính hợp lệ của mã băm
         const tx = await contract.revokeRecord(record.fileHash);
-        await tx.wait(); // Đợi giao dịch được xác thực bởi mạng lưới (Miner)
+        await tx.wait(); 
 
-        // Cập nhật Database Backend sau khi Blockchain đã xác nhận
-        const res = await axios.post("http://localhost:5000/api/students/revoke-record", { studentId, recordId });
+        const res = await axios.post(`${API_URL}/revoke-record`, { studentId, recordId });
         if (res.data.success) {
           alert("Hồ sơ đã bị vô hiệu hóa!");
           fetchData();
@@ -101,27 +100,25 @@ export default function Home() {
     }
   };
 
-  // --- LOGIC BLOCKCHAIN 3: DUYỆT & LƯU HỒ SƠ (WRITE - TỐN GAS) ---
+  // --- LOGIC BLOCKCHAIN 3: DUYỆT & LƯU HỒ SƠ ---
   const handleVerify = async (studentId, recordId, status) => {
     try {
       if (status === 'Verified') {
         if (!window.ethereum) return alert("Vui lòng cài đặt MetaMask!");
         
         const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner(); // Nhà trường ký xác nhận
+        const signer = await provider.getSigner();
         const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, signer);
 
         const student = allStudents.find(s => s.studentId === studentId);
         const record = student.pendingRecords.find(r => r._id === recordId);
 
-        // Gọi hàm addRecord để lưu fileHash và ví sinh viên lên Blockchain
         const tx = await contract.addRecord(record.fileHash, student.walletAddress);
-        await tx.wait(); // Chờ giao dịch hoàn tất trên mạng lưới
-        alert("✅ Đã xác thực lên Blockchain Cronos!");
+        await tx.wait(); 
+        alert("✅ Đã xác thực lên Blockchain!");
       }
 
-      // Sau khi Blockchain ok, gọi API cập nhật trạng thái hồ sơ trong Database
-      await axios.post("http://localhost:5000/api/students/verify-record", {
+      await axios.post(`${API_URL}/verify-record`, {
         studentId, recordId, status, schoolWallet: user.walletAddress
       });
       fetchData();
@@ -138,9 +135,9 @@ export default function Home() {
       const fullBase64 = e.target.result;
       const arrayBuffer = await file.arrayBuffer();
       const wordArray = CryptoJS.lib.WordArray.create(arrayBuffer);
-      const hash = CryptoJS.SHA256(wordArray).toString(); // Băm file sang SHA-256
+      const hash = CryptoJS.SHA256(wordArray).toString();
       try {
-        await axios.post("http://localhost:5000/api/students/upload-record", {
+        await axios.post(`${API_URL}/upload-record`, {
           walletAddress: user.walletAddress, 
           fileName: file.name,
           fileHash: hash,
@@ -169,7 +166,7 @@ export default function Home() {
     if (!studentId) return alert("Không tìm thấy ID sinh viên!");
     if (!window.confirm("Bạn có chắc chắn muốn hủy hồ sơ này?")) return;
     try {
-      const response = await fetch(`http://localhost:5000/api/students/cancel-record/${studentId}/${recordId}`, {
+      const response = await fetch(`${API_URL}/cancel-record/${studentId}/${recordId}`, {
         method: 'DELETE',
       });
       const data = await response.json();
@@ -241,7 +238,7 @@ export default function Home() {
                         <button onClick={() => handleViewFile(rec.fileData, rec.fileName)} style={btnViewSmall}>Xem👁️</button>
                         {rec.status === 'Verified' && (
                           <button 
-                            onClick={() => setSelectedQR(`http://192.168.1.118:5173/verify?hash=${rec.fileHash}`)}
+                            onClick={() => setSelectedQR(`${window.location.origin}/verify?hash=${rec.fileHash}`)}
                             style={{...btnViewSmall, background: '#10b981', color: 'white', border: 'none'}}
                           >
                             Mã QR
@@ -310,7 +307,7 @@ export default function Home() {
                       <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
                         <button onClick={() => handleViewFile(rec.fileData, rec.fileName)} style={btnViewSmall}>🔍 Xem lại</button>
                         <button 
-                          onClick={() => setSelectedQR(`http://192.168.1.118:5173/verify?hash=${rec.fileHash}`)}
+                          onClick={() => setSelectedQR(`${window.location.origin}/verify?hash=${rec.fileHash}`)}
                           style={{...btnViewSmall, background: '#10b981', color: 'white', border: 'none'}}
                         >
                           📱 Hiện QR
@@ -345,7 +342,7 @@ export default function Home() {
   );
 }
 
-// --- CSS STYLES ---
+// --- CSS STYLES (Giữ nguyên như của bạn) ---
 const modalOverlayStyle = { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 };
 const modalContentStyle = { background: '#f8fafc', padding: '40px', borderRadius: '24px', textAlign: 'center', maxWidth: '400px', width: '90%' };
 const welcomeContainerStyle = { width: '100%', minHeight: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', fontFamily: "'Plus Jakarta Sans', sans-serif" };
