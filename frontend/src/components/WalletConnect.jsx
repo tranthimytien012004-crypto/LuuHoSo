@@ -6,42 +6,43 @@ export default function WalletConnect() {
   const [account, setAccount] = useState(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // TỰ ĐỘNG LẤY LINK TỪ VERCEL CONFIG HOẶC LOCALHOST
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api/students";
+
   const loginWithWallet = async (walletAddress) => {
     try {
       setLoading(true);
-      // Gọi đến API bạn đã sửa ở Backend
-      const res = await axios.post("http://localhost:5000/api/students/wallet-login", {
+      // Gọi API đến Render (Không dùng localhost ở đây nữa)
+      const res = await axios.post(`${API_URL}/wallet-login`, {
         walletAddress: walletAddress
       });
 
       if (res.data.success) {
         localStorage.setItem("user", JSON.stringify(res.data.user));
-        
-      
+        alert("Đăng nhập thành công!");
         navigate("/");
         window.location.reload();
       }
     } catch (err) {
       console.error("Lỗi đăng nhập hệ thống:", err);
-      alert("Hệ thống Backend không phản hồi!");
+      alert("Hệ thống Backend (Render) chưa phản hồi. Vui lòng đợi 1-2 phút để server khởi động lại!");
     } finally {
       setLoading(false);
     }
   };
 
- const connectWallet = async () => {
+  const connectWallet = async () => {
     if (window.ethereum) {
       try {
         setLoading(true);
-
-        // BƯỚC 1: Ép MetaMask hiện bảng chọn tài khoản/xin quyền
-        // Điều này sẽ giải quyết việc bạn không tìm thấy menu ngắt kết nối
+        // Bước 1: Xin quyền (giúp đổi ví dễ dàng hơn)
         await window.ethereum.request({
           method: "wallet_requestPermissions",
           params: [{ eth_accounts: {} }],
         });
 
-        // BƯỚC 2: Sau khi người dùng chọn ví trong bảng, lấy địa chỉ đó
+        // Bước 2: Lấy địa chỉ ví
         const accounts = await window.ethereum.request({ 
           method: "eth_requestAccounts" 
         });
@@ -49,11 +50,11 @@ export default function WalletConnect() {
         const addr = accounts[0];
         setAccount(addr);
         
-        // BƯỚC 3: Đăng nhập vào hệ thống của bạn
+        // Bước 3: Đăng nhập
         await loginWithWallet(addr);
 
       } catch (err) {
-        console.error("Người dùng đã hủy chọn ví hoặc có lỗi xảy ra");
+        console.error("Lỗi kết nối ví:", err);
         setLoading(false);
       }
     } else {
@@ -90,6 +91,7 @@ export default function WalletConnect() {
   );
 }
 
+// --- Giữ nguyên Style của bạn ---
 const containerStyle = {
   padding: "30px",
   background: "rgba(15, 23, 42, 0.6)", 
@@ -97,41 +99,7 @@ const containerStyle = {
   border: "1px solid rgba(96, 165, 250, 0.2)",
   textAlign: "center"
 };
-
-const statusConnectedStyle = {
-  color: "#4ade80",
-  fontWeight: "bold",
-  fontSize: "15px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "8px"
-};
-
+const statusConnectedStyle = { color: "#4ade80", fontWeight: "bold", fontSize: "15px", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" };
 const dotStyle = { fontSize: '18px' };
-
-const addressStyle = {
-  fontSize: "13px",
-  color: "#93c5fd",
-  marginTop: "10px",
-  fontFamily: "monospace",
-  background: "rgba(0,0,0,0.2)",
-  padding: "5px",
-  borderRadius: "5px"
-};
-
-const connectBtnStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: '100%',
-  background: "linear-gradient(45deg, #f6851b, #e2761b)",
-  color: "white",
-  border: "none",
-  padding: "14px",
-  borderRadius: "12px",
-  cursor: "pointer",
-  fontWeight: "bold",
-  boxShadow: "0 4px 15px rgba(246, 133, 27, 0.4)",
-  fontSize: "15px"
-};
+const addressStyle = { fontSize: "13px", color: "#93c5fd", marginTop: "10px", fontFamily: "monospace", background: "rgba(0,0,0,0.2)", padding: "5px", borderRadius: "5px" };
+const connectBtnStyle = { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', background: "linear-gradient(45deg, #f6851b, #e2761b)", color: "white", border: "none", padding: "14px", borderRadius: "12px", cursor: "pointer", fontWeight: "bold", boxShadow: "0 4px 15px rgba(246, 133, 27, 0.4)", fontSize: "15px" };
