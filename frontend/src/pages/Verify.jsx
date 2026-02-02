@@ -20,38 +20,44 @@ export default function Verify() {
     }
   }, [rawFileHash]);
 
-  const checkBlockchain = async () => {
+ const checkBlockchain = async () => {
     try {
-      // Kết nối công khai tới Cronos Testnet (Người dùng không cần cài Metamask vẫn xem được)
+      // 1. Kết nối tới Cronos Testnet RPC
       const provider = new ethers.JsonRpcProvider("https://evm-t3.cronos.org");
       const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, provider);
       
-      // --- LOGIC BLOCKCHAIN: CHUẨN HÓA MÃ HASH ---
-      // 1. Loại bỏ khoảng trắng thừa
-      // 2. Đảm bảo mã hash bắt đầu bằng "0x" để thư viện Ethers nhận diện đúng định dạng bytes32/string
-      let cleanHash = rawFileHash.trim(); 
-      if (!cleanHash.startsWith("0x")) {
-        cleanHash = "0x" + cleanHash;
-      }
+      // 2. CHUẨN HÓA HASH TUYỆT ĐỐI: Bỏ 0x cũ -> viết thường -> thêm 0x chuẩn
+      // Việc này đảm bảo hash luôn đúng định dạng bytes32 mà Contract yêu cầu
+      let cleanHash = rawFileHash.trim().replace("0x", "").toLowerCase();
+      const formattedHash = "0x" + cleanHash;
       
-      console.log("🔍 Đang truy vấn Blockchain cho Hash:", cleanHash);
+      console.log("🔍 Đang truy vấn Blockchain cho Hash:", formattedHash);
 
-      // --- LOGIC BLOCKCHAIN: GỌI HÀM verifyRecord ---
-      // Hàm này trả về một mảng/struct: [bool isValid, address student, uint256 timestamp]
-      const record = await contract.verifyRecord(cleanHash);
+      // 3. Gọi hàm verifyRecord
+      const record = await contract.verifyRecord(formattedHash);
       
       console.log("📦 Kết quả từ Contract:", record);
 
-      // Kiểm tra giá trị isValid (nằm ở vị trí index 0 trong mảng trả về)
+      // record[0] là isValid (bool)
       if (record && record[0] === true) {
         setRecordInfo({
           student: record[1], // Địa chỉ ví sinh viên
-          timestamp: Number(record[2]), // Thời gian lưu lên blockchain
-          txHash: cleanHash
+          timestamp: Number(record[2]), // Unix timestamp
+          txHash: formattedHash
         });
         setStatus("valid");
       } else {
-        setStatus("invalid");
+        const recordRetry = await contract.verifyRecord(rawFileHash.trim());
+        if (recordRetry && recordRetry[0] === true) {
+             setRecordInfo({
+                student: recordRetry[1],
+                timestamp: Number(recordRetry[2]),
+                txHash: rawFileHash.trim()
+             });
+             setStatus("valid");
+        } else {
+            setStatus("invalid");
+        }
       }
     } catch (err) {
       console.error("❌ Lỗi tra cứu Blockchain:", err);
