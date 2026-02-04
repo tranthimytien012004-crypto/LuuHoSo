@@ -21,49 +21,31 @@ export default function Verify() {
   }, [rawFileHash]);
 
  const checkBlockchain = async () => {
-    try {
-      // 1. Kết nối tới Cronos Testnet RPC
-      const provider = new ethers.JsonRpcProvider("https://evm-t3.cronos.org");
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, provider);
-      
-      // 2. CHUẨN HÓA HASH TUYỆT ĐỐI: Bỏ 0x cũ -> viết thường -> thêm 0x chuẩn
-      // Việc này đảm bảo hash luôn đúng định dạng bytes32 mà Contract yêu cầu
-      let cleanHash = rawFileHash.trim().replace("0x", "").toLowerCase();
-      const formattedHash = "0x" + cleanHash;
-      
-      console.log("🔍 Đang truy vấn Blockchain cho Hash:", formattedHash);
-
-      // 3. Gọi hàm verifyRecord
-      const record = await contract.verifyRecord(formattedHash);
-      
-      console.log("📦 Kết quả từ Contract:", record);
-
-      // record[0] là isValid (bool)
-      if (record && record[0] === true) {
-        setRecordInfo({
-          student: record[1], // Địa chỉ ví sinh viên
-          timestamp: Number(record[2]), // Unix timestamp
-          txHash: formattedHash
-        });
-        setStatus("valid");
-      } else {
-        const recordRetry = await contract.verifyRecord(rawFileHash.trim());
-        if (recordRetry && recordRetry[0] === true) {
-             setRecordInfo({
-                student: recordRetry[1],
-                timestamp: Number(recordRetry[2]),
-                txHash: rawFileHash.trim()
-             });
-             setStatus("valid");
-        } else {
-            setStatus("invalid");
-        }
-      }
-    } catch (err) {
-      console.error("❌ Lỗi tra cứu Blockchain:", err);
-      setStatus("error");
+  try {
+    const provider = new ethers.JsonRpcProvider("https://evm-t3.cronos.org");
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, contractABI, provider);
+    
+    const h = rawFileHash.trim();
+    // Thử phương án 1: Nguyên bản
+    let record = await contract.verifyRecord(h);
+    
+    // Nếu sai, thử phương án 2: Đảo ngược trạng thái 0x
+    if (!record || record[0] !== true) {
+      const altHash = h.startsWith("0x") ? h.replace("0x", "") : "0x" + h;
+      console.log("🔄 Thử lại với định dạng khác:", altHash);
+      record = await contract.verifyRecord(altHash);
     }
-  };
+
+    if (record && record[0] === true) {
+      setRecordInfo({ student: record[1], timestamp: Number(record[2]) });
+      setStatus("valid");
+    } else {
+      setStatus("invalid");
+    }
+  } catch (err) {
+    setStatus("error");
+  }
+};
 
   return (
     <div style={containerStyle}>

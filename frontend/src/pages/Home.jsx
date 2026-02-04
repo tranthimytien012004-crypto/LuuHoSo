@@ -53,36 +53,40 @@ export default function Home() {
 
   // --- 2. FETCH DATA TỪ BACKEND ---
   const fetchData = useCallback(async () => {
-    try {
-      const [pendingRes, approvedRes] = await Promise.all([
-        axios.get(`${API_URL}/pending-records`),
-        axios.get(`${API_URL}/approved-records`)
-      ]);
-      
-      if (pendingRes.data.success) setAllStudents(pendingRes.data.data || []);
-      
-      if (approvedRes.data.success) {
-        const approvedData = approvedRes.data.data || [];
-        setApprovedStudents(approvedData);
-        
-        // Thu thập tất cả records để check blockchain một lượt
-        const allApproved = approvedData.flatMap(std => std.approvedRecords);
-        if (allApproved.length > 0) checkBlockchainStatus(allApproved);
+  try {
+    const ts = Date.now();
+    const loggedInUser = JSON.parse(localStorage.getItem("user"));
+    if (!loggedInUser) return;
 
-        // Cập nhật thông tin sinh viên hiện tại
-        const loggedInUser = JSON.parse(localStorage.getItem("user"));
-        if (loggedInUser?.role === 'student') {
-            const myId = loggedInUser._id || loggedInUser.id;
-            const me = approvedData.find(s => s.studentId === myId || s._id === myId);
-            if (me) {
-                const updated = { ...loggedInUser, records: me.approvedRecords };
-                setUser(updated);
-                localStorage.setItem("user", JSON.stringify(updated));
-            }
-        }
+    if (loggedInUser.role === 'student') {
+      // GỌI ĐÚNG API SỐ 8 CỦA BẠN
+      const res = await axios.get(`${API_URL}/my-records/${loggedInUser.walletAddress}?t=${ts}`);
+      if (res.data.success) {
+        // Cập nhật lại mảng records đầy đủ (Pending + Verified + Revoked)
+        const updatedUser = { ...loggedInUser, records: res.data.records };
+        setUser(updatedUser);
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        
+        // Kiểm tra Blockchain cho những cái đã duyệt
+        const approvedOnly = res.data.records.filter(r => r.status === 'Verified');
+        checkBlockchainStatus(approvedOnly);
       }
-    } catch (err) { console.error("Fetch Error:", err); }
-  }, [checkBlockchainStatus, API_URL]);
+    } else {
+      // Logic cho Nhà trường giữ nguyên (gọi 2 API pending và approved)
+      const [pendingRes, approvedRes] = await Promise.all([
+        axios.get(`${API_URL}/pending-records?t=${ts}`),
+        axios.get(`${API_URL}/approved-records?t=${ts}`)
+      ]);
+      if (pendingRes.data.success) setAllStudents(pendingRes.data.data);
+      if (approvedRes.data.success) setApprovedStudents(approvedRes.data.data);
+
+      const allApprovedRecords = approvedRes.data.data.flatMap(std => std.approvedRecords);
+        checkBlockchainStatus(allApprovedRecords);
+    }
+  } catch (err) {
+    console.error("Lỗi lấy dữ liệu:", err);
+  }
+}, [API_URL, checkBlockchainStatus]);
 
   useEffect(() => {
     fetchData();
@@ -183,23 +187,28 @@ export default function Home() {
                       <span style={{color: rec.status === 'Verified' ? '#10b981' : '#f59e0b'}}>{rec.status}</span>
                     </td>
                     <td style={tdStyle}>
-                      {(() => {
-                  // Chuẩn hóa hash để tìm kiếm trong object blockchainStatus
-                  const h = rec.fileHash.toLowerCase().trim();
-                  const with0x = h.startsWith("0x") ? h : "0x" + h;
-                  const without0x = h.replace("0x", "");
+                        {(() => {
+                     // 1. Chuẩn hóa hash để đối soát
+                      const h = rec.fileHash.toLowerCase().trim();
+                      const with0x = h.startsWith("0x") ? h : "0x" + h;
+                      const without0x = h.replace("0x", "");
+                    const isVerified = blockchainStatus[h] || blockchainStatus[with0x] || blockchainStatus[without0x];
 
-                  // Kiểm tra xem một trong các biến thể có đang là true không
-                  if (blockchainStatus[h] || blockchainStatus[with0x] || blockchainStatus[without0x]) {
-                  return <span style={{color: '#10b981', fontWeight: 'bold', fontSize: '11px'}}>✅ ĐÃ XÁC THỰC</span>;
-                }
-
-                // Nếu chưa xác thực nhưng trạng thái DB là Verified thì báo đang đồng bộ
-                return rec.status === 'Verified' ? (
-                <small style={{color: '#94a3b8'}}>Đang đồng bộ...</small>
-                      ) : (
-                         <span style={{color: '#64748b'}}>-</span>
-                  );
+                  if (isVerified) {
+                  return (
+                <div style={{ color: '#10b981', fontWeight: 'bold', fontSize: '11px', lineHeight: '1.2' }}>
+                    ✅ ĐÃ LƯU TRÊN <br /> BLOCKCHAIN
+               </div>
+                    );
+                  }
+                   if (rec.status === 'Verified') {
+                  return (
+                    <div style={{ color: '#ef4444', fontWeight: 'bold', fontSize: '11px' }}>
+                         ❌ CHƯA XÁC THỰC
+                     </div>
+                      );
+                      }
+                    return <span style={{ color: '#64748b' }}>-</span>;
                   })()}
                     </td>
                     <td style={tdStyle}>
