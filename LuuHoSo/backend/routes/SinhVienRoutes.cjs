@@ -129,4 +129,23 @@ router.get("/approved-records", async (req, res) => {
     }
 });
 
+// --- 8. LẤY TẤT CẢ HỒ SƠ CỦA 1 SINH VIÊN 
+router.get("/my-records/:walletAddress", async (req, res) => {
+    try {
+        const { walletAddress } = req.params;
+        // Tìm sinh viên theo ví 
+        const student = await Student.findOne({ 
+            walletAddress: { $regex: new RegExp("^" + walletAddress + "$", "i") } 
+        });
+
+        if (!student) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy sinh viên" });
+        }
+
+        // Trả về toàn bộ mảng records (gồm cả Pending, Verified, Revoked)
+        res.json({ success: true, records: student.records });
+    } catch (err) {
+        res.status(500).json({ success: false, message: "Lỗi Server: " + err.message });
+    }
+});
 module.exports = router;

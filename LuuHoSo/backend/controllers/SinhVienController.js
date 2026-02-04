@@ -97,3 +97,11 @@ export const getAllStudents = (req, res) => {
     const database = readData();
     res.json(database);
 };
+
+// 5. Lấy danh sách hồ sơ của RIÊNG 1 SINH VIÊN (Dùng cho trang Student Home)
+export const getMyRecords = (req, res) => {
+    const { studentId } = req.params; 
+    const database = readData();
+    const myRecords = database.filter(item => item.studentId === studentId);
+    res.json(myRecords);
+};
