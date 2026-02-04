@@ -15,8 +15,11 @@ export default function Home() {
   const [selectedQR, setSelectedQR] = useState(null);
   const [blockchainStatus, setBlockchainStatus] = useState({});
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api/students";
-  const CONTRACT_ADDRESS = "0xc574902660D1A42bf9565c4033B08b4F52F9A6A4";
+let rawApiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000/api/students";
+rawApiUrl = String(rawApiUrl).replace(/,/g, '').trim(); 
+
+const API_URL = rawApiUrl.endsWith('/') ? rawApiUrl.slice(0, -1) : rawApiUrl;
+const CONTRACT_ADDRESS = "0xc574902660D1A42bf9565c4033B08b4F52F9A6A4";
 
   // --- 1. LOGIC BLOCKCHAIN: KIỂM TRA TRẠNG THÁI ---
   const checkBlockchainStatus = useCallback(async (records) => {
